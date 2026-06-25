@@ -1,24 +1,73 @@
 # Playwright image for Selenoid
 
-Docker-образ браузера Playwright для [qa-guru/selenoid](https://github.com/qa-guru/selenoid) (native Playwright через WebSocket).
+Docker-образ **browser node** с Playwright для [qa-guru/selenoid](https://github.com/qa-guru/selenoid) — native Playwright через WebSocket `/playwright/{browser}/{version}`.
 
 **Docker Hub:** [`qaguru/playwright`](https://hub.docker.com/r/qaguru/playwright)
 
-## Что внутри
+> Это **не** образ Selenoid hub. Hub — отдельный бинарник / будущий образ `qaguru/selenoid`.  
+> Здесь только контейнер браузера, который hub поднимает на каждую сессию.
 
-Базовый слой — [`mcr.microsoft.com/playwright`](https://mcr.microsoft.com/en-us/product/playwright/about). Поверх него:
+---
 
-| Добавление | Зачем |
-|------------|-------|
-| `x11vnc`, `x11-utils` | VNC и видеозапись (`enableVNC`, `enableVideo`) |
-| `playwright@<version>` в `/home/pwuser/node_modules` | фиксированный `run-server` для hub |
-| `launch-headed-browser.js` | headed-режим для ручных сессий в Selenoid UI |
+## Что нового по сравнению с Microsoft Playwright
 
-Hub Selenoid (`qaguru/selenoid` — отдельный образ) при старте сессии поднимает `Xvfb`, при необходимости VNC и:
+Базовый слой — [`mcr.microsoft.com/playwright`](https://mcr.microsoft.com/en-us/product/playwright/about) (Ubuntu Noble, `pwuser`, бинарники Chromium / Firefox / WebKit, Node.js).
+
+Мы добавляем **тонкую надстройку** (~10 MB + npm-пакет):
+
+| # | Добавление | Зачем |
+|---|------------|-------|
+| 1 | **`x11vnc`** + **`x11-utils`** | VNC и видеозапись: `enableVNC=true`, `enableVideo=true` в query WebSocket |
+| 2 | **`playwright@<version>`** в `/home/pwuser/node_modules` | фиксированный путь и версия для `run-server` — hub всегда знает, что запускать |
+| 3 | **`launch-headed-browser.js`** | headed-режим для ручных сессий в Selenoid UI (Capabilities → Create Session) |
+
+Hub при старте контейнера (не в образе, а в [playwright_docker.go](https://github.com/qa-guru/selenoid/blob/main/service/playwright_docker.go)) поднимает `Xvfb`, при необходимости VNC и:
 
 ```bash
 node /home/pwuser/node_modules/playwright/cli.js run-server --port 3000 --host 0.0.0.0
 ```
+
+---
+
+## Чего в образе нет — это делает Selenoid hub
+
+| Функция | Где |
+|---------|-----|
+| WebSocket `ws://host:4444/playwright/chromium/1.61.1` | `./bin/selenoid` (hub) |
+| Прокси тест ↔ браузер | hub |
+| Запись видео | `selenoid/video-recorder` (отдельный контейнер) |
+| Старт Xvfb, VNC, `run-server` | hub генерирует startup-скрипт при `docker run` |
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Selenoid HUB  (Go, порт 4444)                          │
+│  qa-guru/selenoid                                       │
+└──────────────────────┬──────────────────────────────────┘
+                       │ docker run ...
+         ┌─────────────┼─────────────┐
+         ▼             ▼             ▼
+   twilio/selenoid   qaguru/playwright   selenoid/video-recorder
+   :chrome_stable    :v1.61.1-noble     (запись видео)
+         │             │
+    WebDriver       Playwright
+```
+
+---
+
+## Сравнение в одну таблицу
+
+| | `mcr.microsoft.com/playwright` | `qaguru/playwright` |
+|--|:------------------------------:|:-------------------:|
+| Браузеры Playwright | ✅ | ✅ (тот же слой) |
+| `run-server` для remote connect | можно, путь/версия не зафиксированы | ✅ фиксированный CLI |
+| VNC (`x11vnc`) | ❌ | ✅ |
+| Headed UI-сессии | ❌ | ✅ `launch-headed-browser.js` |
+| Интеграция с Selenoid | ❌ | ✅ |
+| multi-arch `arm64` + `amd64` | ✅ | ✅ |
+
+**Итого:** наш образ — тонкая обёртка для Selenoid: VNC, видео, ручные сессии в UI и стабильный `run-server`. Сам Playwright и браузеры — те же, что у Microsoft.
+
+---
 
 ## Pull
 
@@ -26,7 +75,12 @@ node /home/pwuser/node_modules/playwright/cli.js run-server --port 3000 --host 0
 docker pull qaguru/playwright:v1.61.1-noble
 ```
 
-Multi-arch: `linux/amd64`, `linux/arm64` (Mac Apple Silicon).
+| Платформа | Когда подтянется |
+|-----------|------------------|
+| `linux/arm64` | Mac Apple Silicon, ARM-серверы |
+| `linux/amd64` | Linux CI, x86-серверы |
+
+---
 
 ## Сборка
 
@@ -35,7 +89,7 @@ chmod +x scripts/build.sh scripts/push.sh
 ./scripts/build.sh v1.61.1-noble
 ```
 
-Локально на Mac собирается `arm64`, на Linux — `amd64`. Платформа: `PLATFORM=linux/amd64 ./scripts/build.sh v1.61.1-noble`.
+Локально на Mac — `arm64`, на Linux — `amd64`. Явно: `PLATFORM=linux/amd64 ./scripts/build.sh v1.61.1-noble`.
 
 ## Публикация в Docker Hub
 
@@ -44,7 +98,11 @@ docker login
 ./scripts/push.sh v1.61.1-noble
 ```
 
-Тег `v<playwright-version>-noble`, например `v1.61.1-noble`, `v1.61.0-noble`.
+Тег: `v<playwright-version>-noble` (например `v1.61.1-noble`, `v1.61.0-noble`).
+
+CI: GitHub Actions при push тега `v*-noble` или вручную через **workflow_dispatch** (нужны secrets `DOCKER_USERNAME`, `DOCKER_PASSWORD`).
+
+---
 
 ## browsers.json (Selenoid)
 
@@ -56,6 +114,7 @@ docker login
       "1.61.1": {
         "image": "qaguru/playwright:v1.61.1-noble",
         "port": "3000",
+        "path": "/",
         "protocol": "playwright",
         "playwrightVersion": "1.61.1",
         "user": "pwuser",
@@ -67,22 +126,44 @@ docker login
 }
 ```
 
-Версия клиента `@playwright/test` должна совпадать с `playwrightVersion`.
+Версия клиента `@playwright/test` / `playwright` в тестах **должна совпадать** с `playwrightVersion`.
+
+Пример подключения:
+
+```
+ws://127.0.0.1:4444/playwright/chromium/1.61.1?enableVideo=true&enableVNC=true
+```
+
+---
 
 ## Контракт с Selenoid
 
-Пути в образе не менять без обновления [playwright_docker.go](https://github.com/qa-guru/selenoid/blob/main/service/playwright_docker.go) в fork Selenoid:
+Пути в образе **не менять** без синхронного обновления [playwright_docker.go](https://github.com/qa-guru/selenoid/blob/main/service/playwright_docker.go):
 
-| Путь | Назначение |
-|------|------------|
-| `/home/pwuser` | рабочая директория (`pwuser`) |
-| `/home/pwuser/node_modules/playwright/cli.js` | `run-server` |
-| `/home/pwuser/launch-headed-browser.js` | headed UI-сессии |
+| Путь в образе | Назначение |
+|---------------|------------|
+| `/home/pwuser` | рабочая директория, пользователь `pwuser` |
+| `/home/pwuser/node_modules/playwright/cli.js` | `playwright run-server` |
+| `/home/pwuser/launch-headed-browser.js` | headed-браузер для VNC в UI |
+
+---
 
 ## Связанные репозитории
 
 | Репозиторий | Роль |
 |-------------|------|
-| [qa-guru/selenoid](https://github.com/qa-guru/selenoid) | Hub, WebSocket `/playwright/...` |
-| [qa-guru/selenoid-ui](https://github.com/qa-guru/selenoid-ui) | UI, Capabilities, VNC |
-| [qa-guru/selenoid_selenium_playwright](https://github.com/qa-guru/selenoid_selenium_playwright) | Примеры тестов |
+| [qa-guru/playwright-image](https://github.com/qa-guru/playwright-image) | **этот репозиторий** — Dockerfile, сборка образа |
+| [qa-guru/selenoid](https://github.com/qa-guru/selenoid) | Hub, WebSocket `/playwright/...`, `browsers.json` |
+| [qa-guru/selenoid-ui](https://github.com/qa-guru/selenoid-ui) | UI: Capabilities, VNC, Playwright-сессии |
+| [qa-guru/selenoid_selenium_playwright](https://github.com/qa-guru/selenoid_selenium_playwright) | Примеры тестов (Java, JS, TS, Python) |
+
+---
+
+## Файлы в репозитории
+
+| Файл | Описание |
+|------|----------|
+| `Dockerfile` | база MS Playwright + VNC + npm playwright |
+| `launch-headed-browser.js` | headed-режим для ручных UI-сессий |
+| `scripts/build.sh` | локальная сборка |
+| `scripts/push.sh` | multi-arch push в Docker Hub |
