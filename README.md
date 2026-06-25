@@ -7,6 +7,8 @@ Docker-образ **browser node** с Playwright для [qa-guru/selenoid](https
 > Это **не** образ Selenoid hub. Hub — отдельный бинарник / будущий образ `qaguru/selenoid`.  
 > Здесь только контейнер браузера, который hub поднимает на каждую сессию.
 
+**Hub:** Docker Engine **26.1.x** (API **1.45**), Go **1.23.x** — см. [README](../README.md#требования-к-окружению) в корне репозитория.
+
 ---
 
 ## Что нового по сравнению с Microsoft Playwright
@@ -155,7 +157,9 @@ ws://127.0.0.1:4444/playwright/chromium/1.61.1?enableVideo=true&enableVNC=true
 | [qa-guru/playwright-image](https://github.com/qa-guru/playwright-image) | **этот репозиторий** — Dockerfile, сборка образа |
 | [qa-guru/selenoid](https://github.com/qa-guru/selenoid) | Hub, WebSocket `/playwright/...`, `browsers.json` |
 | [qa-guru/selenoid-ui](https://github.com/qa-guru/selenoid-ui) | UI: Capabilities, VNC, Playwright-сессии |
-| [qa-guru/selenoid_selenium_playwright](https://github.com/qa-guru/selenoid_selenium_playwright) | Примеры тестов (Java, JS, TS, Python) |
+| [qa-guru/selenoid_selenium_playwright_tests](https://github.com/qa-guru/selenoid_selenium_playwright_tests) | Примеры тестов (Java, JS, TS, Python) |
+
+Локальная копия в монорепо: `selenoid_selenium_playwright_tests/`.
 
 ---
 
