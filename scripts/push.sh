@@ -2,11 +2,21 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VERSION="${1:-v1.61.1-noble}"
-IMAGE="${DOCKER_IMAGE:-qaguru/playwright}"
-TAG="${IMAGE}:${VERSION}"
-PW_PACKAGE="${VERSION#v}"
-PW_PACKAGE="${PW_PACKAGE%-noble}"
+BROWSER="${1:-}"
+VERSION="${2:-1.61.1}"
+
+if [[ -z "${BROWSER}" ]]; then
+  echo "Usage: $0 <browser|all> [version-tag]" >&2
+  exit 1
+fi
+
+normalize_version() {
+  local v="${1#v}"
+  v="${v%-noble}"
+  printf '%s' "$v"
+}
+
+PW_PACKAGE="$(normalize_version "${VERSION}")"
 PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
 BUILDER="${BUILDER:-playwright-image}"
 
@@ -17,7 +27,7 @@ fi
 
 if ! docker-credential-desktop list 2>/dev/null | grep -q 'index.docker.io'; then
   echo "Run: docker login" >&2
-  echo "Push to ${IMAGE} requires write access to the Docker Hub namespace." >&2
+  echo "Push to qaguru/playwright-* requires write access to the Docker Hub namespace." >&2
   exit 1
 fi
 
@@ -27,13 +37,33 @@ else
   docker buildx use "${BUILDER}"
 fi
 
-docker buildx build \
-  --pull \
-  --platform "${PLATFORMS}" \
-  --build-arg "PLAYWRIGHT_VERSION=${VERSION}" \
-  --build-arg "PLAYWRIGHT_PACKAGE=${PW_PACKAGE}" \
-  -t "${TAG}" \
-  --push \
-  "${ROOT}"
+push_one() {
+  local browser="$1"
+  local image="qaguru/playwright-${browser}"
+  local tag="${image}:${PW_PACKAGE}"
+  local dockerfile="${ROOT}/playwright-${browser}/Dockerfile"
+  local platforms="${PLATFORMS}"
 
-echo "Pushed ${TAG} for ${PLATFORMS}"
+  if [[ "${browser}" == "chrome" || "${browser}" == "msedge" ]]; then
+    platforms="${PLATFORMS_ARM:-linux/amd64}"
+  fi
+
+  docker buildx build \
+    --pull \
+    --platform "${platforms}" \
+    --build-arg "PLAYWRIGHT_VERSION=${PW_PACKAGE}" \
+    -f "${dockerfile}" \
+    -t "${tag}" \
+    --push \
+    "${ROOT}"
+
+  echo "Pushed ${tag} for ${platforms}"
+}
+
+if [[ "${BROWSER}" == "all" ]]; then
+  for b in chromium firefox webkit chrome msedge; do
+    push_one "${b}"
+  done
+else
+  push_one "${BROWSER}"
+fi

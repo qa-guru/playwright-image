@@ -1,0 +1,111 @@
+const { chromium, firefox, webkit } = require("playwright");
+
+const browserTypes = { chromium, firefox, webkit };
+
+function env(name, defaultValue = "") {
+  const value = process.env[name];
+  return typeof value === "string" && value.length > 0 ? value : defaultValue;
+}
+
+function parseBoolean(name, defaultValue) {
+  const value = process.env[name];
+  if (typeof value !== "string" || value.length === 0) {
+    return defaultValue;
+  }
+  switch (value.toLowerCase()) {
+    case "1":
+    case "true":
+    case "yes":
+    case "on":
+      return true;
+    case "0":
+    case "false":
+    case "no":
+    case "off":
+      return false;
+    default:
+      return defaultValue;
+  }
+}
+
+function parsePort(name, defaultValue) {
+  const raw = env(name, String(defaultValue));
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`${name} must be a valid port`);
+  }
+  return port;
+}
+
+function parseScreenResolution(name) {
+  const value = process.env[name];
+  if (typeof value !== "string" || value.length === 0) {
+    return null;
+  }
+  const match = /^(\d+)x(\d+)(?:x\d+)?$/.exec(value.trim());
+  if (!match) {
+    return null;
+  }
+  return { width: Number(match[1]), height: Number(match[2]) };
+}
+
+const browserTypeName = env("PW_BROWSER_TYPE", "chromium");
+const browserType = browserTypes[browserTypeName];
+if (!browserType || typeof browserType.launchServer !== "function") {
+  throw new Error(`PW_BROWSER_TYPE must be one of: chromium, firefox, webkit`);
+}
+
+const host = env("PW_HOST", "0.0.0.0");
+const port = parsePort("PW_PORT", 3000);
+const wsPath = env("PW_PATH", "/");
+const headless = parseBoolean("PW_HEADLESS", true);
+
+const launchOptions = {
+  headless,
+  host,
+  port,
+  wsPath,
+};
+
+if (browserTypeName === "chromium") {
+  launchOptions.args = ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"];
+  const screenSize = parseScreenResolution("SCREEN_RESOLUTION");
+  if (screenSize) {
+    launchOptions.args.push(`--window-size=${screenSize.width},${screenSize.height}`);
+  }
+}
+
+const channel = env("PW_BROWSER_CHANNEL");
+if (channel) {
+  launchOptions.channel = channel;
+}
+
+const executablePathEnv = env("PW_EXECUTABLE_PATH_ENV");
+if (executablePathEnv && process.env[executablePathEnv]) {
+  delete launchOptions.channel;
+  launchOptions.executablePath = process.env[executablePathEnv];
+}
+
+async function main() {
+  const server = await browserType.launchServer(launchOptions);
+  console.log(
+    `Playwright ${env("PW_BROWSER_NAME", browserTypeName)} server listening at ${server.wsEndpoint()} (headless=${headless})`,
+  );
+
+  const shutdown = async () => {
+    try {
+      await server.close();
+    } finally {
+      process.exit(0);
+    }
+  };
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+  await new Promise(() => {});
+}
+
+main().catch((error) => {
+  console.error("Failed to start Playwright server:", error);
+  process.exit(1);
+});

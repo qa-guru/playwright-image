@@ -2,13 +2,19 @@ const { chromium, firefox, webkit } = require("playwright");
 
 const browserTypes = { chromium, firefox, webkit };
 
-const pwBrowser = process.env.PW_BROWSER || "chromium";
-const browserType = browserTypes[pwBrowser] || chromium;
+const browserTypeName = process.env.PW_BROWSER_TYPE || "chromium";
+const browserType = browserTypes[browserTypeName] || chromium;
 
 process.env.DISPLAY = process.env.DISPLAY || ":99";
 
+const launchOptions = { headless: false };
+const channel = process.env.PW_BROWSER_CHANNEL;
+if (channel) {
+  launchOptions.channel = channel;
+}
+
 (async () => {
-  const browser = await browserType.launch({ headless: false });
+  const browser = await browserType.launch(launchOptions);
   const page = await browser.newPage();
   await page.goto("about:blank");
   browser.on("disconnected", () => process.exit(0));
