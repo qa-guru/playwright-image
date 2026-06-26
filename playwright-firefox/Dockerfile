@@ -10,7 +10,8 @@ ENV PW_HOST=0.0.0.0 \
     PW_BROWSER_TYPE=firefox \
     PW_BROWSER_NAME=Firefox \
     DISPLAY=:99 \
-    DISPLAY_NUM=99
+    DISPLAY_NUM=99 \
+    NODE_PATH=/usr/lib/node_modules
 
 USER root
 RUN apt-get update \

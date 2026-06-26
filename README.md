@@ -12,11 +12,11 @@ Per-browser Docker images for [qa-guru/selenoid](https://github.com/qa-guru/sele
 
 | Docker image | Playwright browser | URL-пример |
 |---|---|---|
-| `qaguru/playwright-chromium` | Chromium | `/playwright/chromium/1.61.1` |
+| `qaguru/playwright-chromium` | Chromium | `/playwright/playwright-chromium/1.61.1` |
 | `qaguru/playwright-firefox` | Firefox | `/playwright/firefox/1.61.1` |
-| `qaguru/playwright-webkit` | WebKit | `/playwright/webkit/1.61.1` |
+| `qaguru/playwright-webkit` | WebKit | `/playwright/playwright-webkit/1.61.1` |
 | `qaguru/playwright-chrome` | Google Chrome | `/playwright/chrome/1.61.1` |
-| `qaguru/playwright-msedge` | Microsoft Edge | `/playwright/msedge/1.61.1` |
+| `qaguru/playwright-msedge` | Microsoft Edge | `/playwright/playwright-msedge/1.61.1` |
 
 Каждый образ — self-contained node: Xvfb, VNC, `launchServer` через `/opt/playwright/entrypoint.sh`. Hub передаёт env (`ENABLE_VNC`, `ENABLE_VIDEO`, `PW_HEADLESS`, …) и использует `ENTRYPOINT` образа.
 
@@ -80,7 +80,7 @@ docker login
 
 ```json
 {
-  "chromium": {
+  "playwright-chromium": {
     "default": "1.61.1",
     "versions": {
       "1.61.1": {
@@ -101,7 +101,7 @@ docker login
 WebDriver `chrome` / `firefox` и Playwright `chrome` / `firefox` — разные ключи в каталоге:
 
 - WebDriver: `chrome`, `firefox`
-- Playwright: `chromium`, `firefox-playwright` (alias URL `/playwright/firefox/…`), `webkit`, `chrome-playwright` (alias URL `/playwright/chrome/…`), `msedge`
+- Playwright: `playwright-chromium`, `playwright-firefox`, `playwright-webkit`, `playwright-chrome` (alias URL `/playwright/chrome/…`), `playwright-msedge`
 
 ---
 

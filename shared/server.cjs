@@ -1,4 +1,4 @@
-const { chromium, firefox, webkit } = require("playwright");
+const { chromium, firefox, webkit } = require("playwright-core");
 
 const browserTypes = { chromium, firefox, webkit };
 
