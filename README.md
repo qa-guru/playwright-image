@@ -108,6 +108,65 @@ WebDriver Chrome/Firefox — другие образы ([twilio/selenoid](https:
 
 ---
 
+## Сравнение с официальным образом Microsoft
+
+Образы `qaguru/playwright-*` **наследуются** от [`mcr.microsoft.com/playwright`](https://playwright.dev/docs/docker) и добавляют слой для Selenoid hub. Движки браузеров и системные зависимости — те же, что в upstream.
+
+| | Microsoft `mcr.microsoft.com/playwright` | `qaguru/playwright-*` (этот репозиторий) |
+|---|---|---|
+| **Назначение** | CI, разработка, ручной `run-server` | Browser node для [qa-guru/selenoid](https://github.com/qa-guru/selenoid) |
+| **Базовый слой** | Ubuntu Noble + браузеры Playwright | `FROM mcr.microsoft.com/playwright:v<версия>-noble` |
+| **Образов на версию** | **1** — все браузеры внутри | **5** — отдельный образ на браузер |
+| **Playwright npm** | Не включён (ставится отдельно) | `playwright-core@<версия>` в образе |
+| **`launchServer`** | Вручную: `npx playwright run-server --port 3000 --host 0.0.0.0` | Автоматически: `/opt/playwright/server.cjs` в `ENTRYPOINT` |
+| **Подключение клиента** | Прямой WebSocket к контейнеру (`ws://host:3000/`) | Через hub: `ws://selenoid:4444/playwright/playwright-chromium/1.61.1` |
+| **VNC / headed UI** | noVNC только через [devcontainer feature](https://playwright.dev/docs/docker#connecting-using-novnc-and-github-codespaces) | Xvfb + x11vnc на **:5900** (Selenoid UI, пароль `selenoid`) |
+| **Видеозапись** | Нет | `ENABLE_VIDEO` + sidecar `selenoid/video-recorder` |
+| **Healthcheck** | Нет | HTTP probe на `:3000` |
+| **PID 1 / init** | Рекомендуется `--init` при `docker run` | `dumb-init` в `ENTRYPOINT` |
+| **Пользователь** | `root` (по умолчанию) или `pwuser` | `pwuser` |
+| **Docker-тег** | `v1.61.1-noble` | `1.61.1` |
+| **Реестр** | [Microsoft Artifact Registry](https://mcr.microsoft.com/artifact/mar/playwright/about) | [Docker Hub `qaguru/playwright-*`](https://hub.docker.com/u/qaguru) |
+
+### Браузеры в образе
+
+| Браузер | Microsoft (`v1.61.1-noble`) | `qaguru/playwright-*` |
+|---|---|---|
+| Chromium | ✅ bundled | `playwright-chromium` |
+| Firefox | ✅ bundled | `playwright-firefox` |
+| WebKit | ✅ bundled | `playwright-webkit` |
+| Google Chrome (stable) | ❌ | `playwright-chrome` (`npx playwright install chrome`) |
+| Microsoft Edge (stable) | ❌ | `playwright-msedge` (`npx playwright install msedge`) |
+
+В upstream-образе все три движка в **одном** контейнере; `run-server` отдаёт тот браузер, к которому подключается клиент. Здесь — **отдельный контейнер на браузер**, чтобы hub мог масштабировать и выбирать образ по имени в `browsers.json`.
+
+### Версии и движки
+
+Тег Playwright ↔ движки браузеров **совпадают** с Microsoft-образом той же версии (общий `browsers.json` Playwright). Пример для **1.61.1**:
+
+| | Microsoft | `qaguru/playwright-chromium:1.61.1` |
+|---|---|---|
+| Базовый образ | — | `mcr.microsoft.com/playwright:v1.61.1-noble` |
+| Chromium | 149.0.7827.55 | 149.0.7827.55 |
+| Firefox | 151.0 | 151.0 (в `playwright-firefox`) |
+| WebKit | 26.5 | 26.5 (в `playwright-webkit`) |
+
+> Официальный образ Microsoft предназначен для **тестов и разработки** ([документация](https://playwright.dev/docs/docker)); для untrusted-сайтов рекомендуют отдельного пользователя и seccomp. Образы `qaguru/playwright-*` рассчитаны на **доверенные e2e-тесты** в инфраструктуре Selenoid.
+
+### Эквивалент `run-server` вручную
+
+Официальный способ remote connect:
+
+```bash
+docker run -p 3000:3000 --rm --init --user pwuser \
+  mcr.microsoft.com/playwright:v1.61.1-noble \
+  /bin/sh -c "npx -y playwright@1.61.1 run-server --port 3000 --host 0.0.0.0"
+```
+
+В Selenoid hub делает то же самое за вас: стартует `qaguru/playwright-chromium:1.61.1`, проксирует WebSocket, при необходимости поднимает VNC и video-recorder.
+
+---
+
 ## Структура репозитория
 
 ```
