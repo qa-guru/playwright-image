@@ -1,0 +1,62 @@
+ARG PLAYWRIGHT_VERSION=1.61.1
+FROM alpine:3.21 AS init
+RUN apk add --no-cache dumb-init
+
+FROM ubuntu:noble
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG PLAYWRIGHT_VERSION
+ARG NODE_VERSION=24
+ARG PW_BROWSER_TYPE=chromium
+ARG PW_BROWSER_NAME=Chromium
+
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    PW_HOST=0.0.0.0 \
+    PW_PORT=3000 \
+    PW_PATH=/ \
+    PW_HEADLESS=true \
+    PW_BROWSER_TYPE=${PW_BROWSER_TYPE} \
+    PW_BROWSER_NAME=${PW_BROWSER_NAME} \
+    NODE_PATH=/usr/lib/node_modules \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+RUN apt-get update \
+    && apt-get install -y curl wget gpg ca-certificates \
+    && mkdir -p /etc/apt/keyrings \
+    && curl -sL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_VERSION}.x nodistro main" >> /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update \
+    && apt-get install -y nodejs \
+    && adduser --disabled-password --gecos '' pwuser \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /ms-playwright /ms-playwright-agent /opt/playwright \
+    && cd /ms-playwright-agent \
+    && npm init -y \
+    && npm i "playwright-core@${PLAYWRIGHT_VERSION}" \
+    && npm exec --no -- playwright-core install --with-deps chromium \
+    && npm install -g "playwright-core@${PLAYWRIGHT_VERSION}" \
+    && rm -rf /ms-playwright-agent /root/.npm \
+    && chmod -R 777 /ms-playwright
+
+COPY --from=init /usr/bin/dumb-init /usr/bin/dumb-init
+COPY shared/server.cjs shared/entrypoint-min.sh /opt/playwright/
+RUN chmod +x /opt/playwright/entrypoint-min.sh
+
+USER pwuser
+WORKDIR /home/pwuser
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=5s --timeout=3s --start-period=30s --retries=6 \
+    CMD curl -sf http://127.0.0.1:3000/ >/dev/null || exit 1
+
+LABEL org.opencontainers.image.title="qaguru/playwright-chromium-min" \
+      org.opencontainers.image.source="https://github.com/qa-guru/playwright-image" \
+      io.qaguru.browser="chromium" \
+      io.qaguru.protocol="playwright" \
+      io.qaguru.port="3000" \
+      io.qaguru.variant="min-scratch"
+
+ENTRYPOINT ["dumb-init", "--", "/opt/playwright/entrypoint-min.sh"]

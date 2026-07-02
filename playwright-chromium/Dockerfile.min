@@ -1,0 +1,47 @@
+ARG PLAYWRIGHT_VERSION=1.61.1
+# Fallback for local builds when scratch apt is unavailable.
+# CI publishes Dockerfile.min.scratch as qaguru/playwright-chromium:<version>-min.
+FROM alpine:3.21 AS init
+RUN apk add --no-cache dumb-init
+
+FROM mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble
+
+ARG PLAYWRIGHT_VERSION
+ARG PW_BROWSER_TYPE=chromium
+ARG PW_BROWSER_NAME=Chromium
+
+ENV PW_HOST=0.0.0.0 \
+    PW_PORT=3000 \
+    PW_PATH=/ \
+    PW_HEADLESS=true \
+    PW_BROWSER_TYPE=${PW_BROWSER_TYPE} \
+    PW_BROWSER_NAME=${PW_BROWSER_NAME} \
+    NODE_PATH=/usr/lib/node_modules \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+USER root
+RUN rm -rf /ms-playwright/firefox-* /ms-playwright/webkit-* \
+    && npm install -g "playwright-core@${PLAYWRIGHT_VERSION}" \
+    && mkdir -p /opt/playwright
+
+COPY --from=init /usr/bin/dumb-init /usr/bin/dumb-init
+
+COPY shared/server.cjs shared/entrypoint-min.sh /opt/playwright/
+RUN chmod +x /opt/playwright/entrypoint-min.sh
+
+USER pwuser
+WORKDIR /home/pwuser
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=5s --timeout=3s --start-period=30s --retries=6 \
+    CMD curl -sf http://127.0.0.1:3000/ >/dev/null || exit 1
+
+LABEL org.opencontainers.image.title="qaguru/playwright-chromium-min" \
+      org.opencontainers.image.source="https://github.com/qa-guru/playwright-image" \
+      io.qaguru.browser="chromium" \
+      io.qaguru.protocol="playwright" \
+      io.qaguru.port="3000" \
+      io.qaguru.variant="min"
+
+ENTRYPOINT ["dumb-init", "--", "/opt/playwright/entrypoint-min.sh"]

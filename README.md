@@ -25,7 +25,21 @@ Playwright test  ──►  selenoid hub  ──►  qaguru/playwright-chromium:
                                               (этот репозиторий)
 ```
 
-WebDriver Chrome/Firefox — другие образы ([twilio/selenoid](https://hub.docker.com/r/twilio/selenoid)), они здесь не собираются.
+WebDriver Chrome/Firefox для **cold** Selenoid — [twilio/selenoid](https://hub.docker.com/r/twilio/selenoid). Для **warm pool CI** — [webdriver-image](../webdriver-image/README.md) + [warm-pool-orchestrator](../warm-pool-orchestrator/README.md).
+
+### Warm pool mode (feature branch)
+
+Образы с `WARM_ENABLED=true` поднимают warm API на `:8080` (общий контракт с webdriver-image):
+
+```bash
+curl -sf http://127.0.0.1:8080/warm/goto \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"https://example.com/login.html"}'
+curl -sf -X POST http://127.0.0.1:8080/warm/video/start \
+  -d '{"sessionId":"pool-pw-chromium-1"}'
+```
+
+Playwright WS остаётся на `:3000`. Orchestrator проксирует preopen/video — см. [warm-pool-orchestrator/README.md](../warm-pool-orchestrator/README.md).
 
 ## Связанные репозитории
 
@@ -119,7 +133,7 @@ WebDriver Chrome/Firefox — другие образы ([twilio/selenoid](https:
 | **Образов на версию** | **1** — все браузеры внутри | **5** — отдельный образ на браузер |
 | **Playwright npm** | Не включён (ставится отдельно) | `playwright-core@<версия>` в образе |
 | **`launchServer`** | Вручную: `npx playwright run-server --port 3000 --host 0.0.0.0` | Автоматически: `/opt/playwright/server.cjs` в `ENTRYPOINT` |
-| **Подключение клиента** | Прямой WebSocket к контейнеру (`ws://host:3000/`) | Через hub: `ws://selenoid:4444/playwright/playwright-chromium/1.61.1` |
+| **Подключение клиента** | Прямой WebSocket к контейнеру (`ws://host:3000/`) | Через hub: `ws://selenoid:4444/playwright/playwright-chromium/1.61.1?enableVNC=true&enableVideo=true` |
 | **VNC / headed UI** | noVNC только через [devcontainer feature](https://playwright.dev/docs/docker#connecting-using-novnc-and-github-codespaces) | Xvfb + x11vnc на **:5900** (Selenoid UI, пароль `selenoid`) |
 | **Видеозапись** | Нет | `ENABLE_VIDEO` + sidecar `selenoid/video-recorder` |
 | **Healthcheck** | Нет | HTTP probe на `:3000` |
@@ -209,18 +223,27 @@ chmod +x scripts/build.sh scripts/push.sh
 # один браузер
 ./scripts/build.sh chromium 1.61.1
 
+# chromium-only min (headless CI, без VNC/warm)
+./scripts/build.sh chromium 1.61.1 min
+
 # все браузеры
 ./scripts/build.sh all 1.61.1
 ```
+
+Тег min: `qaguru/playwright-chromium:<version>-min`.  
+Сборка min: `Dockerfile.min.scratch` (chromium-only с нуля на `ubuntu:noble`, ~1.6 GB).  
+`Dockerfile.min` — запасной вариант на базе `mcr.microsoft.com/playwright` (для локальной сборки, если scratch не нужен).
 
 ## Публикация
 
 ```bash
 docker login
-./scripts/push.sh all 1.61.1
+./scripts/push.sh all 1.61.1          # все браузеры + chromium-min
+./scripts/push.sh chromium 1.61.1 min # только min
 ```
 
-Тег: `<playwright-version>` (например `1.61.1`).
+Теги: `<playwright-version>` (например `1.61.1`) и `1.61.1-min` для headless CI chromium.  
+CI (`publish.yml`) публикует `-min` автоматически вместе с остальными образами.
 
 ---
 

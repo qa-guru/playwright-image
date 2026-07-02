@@ -15,8 +15,21 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        browser: [chromium, firefox, webkit, chrome, msedge]
+        include:
+          - browser: chromium
+            variant: ""
+          - browser: firefox
+            variant: ""
+          - browser: webkit
+            variant: ""
+          - browser: chrome
+            variant: ""
+          - browser: msedge
+            variant: ""
+          - browser: chromium
+            variant: min
     steps:
       - uses: actions/checkout@v4
 
@@ -40,6 +53,11 @@ jobs:
         env:
           VERSION: ${{ steps.tag.outputs.version }}
           BROWSER: ${{ matrix.browser }}
+          VARIANT: ${{ matrix.variant }}
         run: |
           chmod +x scripts/push.sh
-          ./scripts/push.sh "${BROWSER}" "${VERSION}"
+          if [[ -n "${VARIANT}" ]]; then
+            ./scripts/push.sh "${BROWSER}" "${VERSION}" "${VARIANT}"
+          else
+            ./scripts/push.sh "${BROWSER}" "${VERSION}"
+          fi
