@@ -31,7 +31,7 @@ normalize_version() {
 
 PW_PACKAGE="$(normalize_version "${VERSION}")"
 PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
-BUILDER="${BUILDER:-playwright-image}"
+BUILDER="${BUILDER:-browser-image}"
 
 if ! docker info >/dev/null 2>&1; then
   echo "Docker is not running." >&2

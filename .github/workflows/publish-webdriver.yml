@@ -1,0 +1,82 @@
+name: publish-webdriver
+
+on:
+  push:
+    tags:
+      - "chrome-[0-9]+"
+      - "chrome-[0-9]+-min"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Chrome major for warm image, e.g. 148"
+        required: true
+        default: "148"
+      publish_min:
+        description: "Also publish chrome-min images (149-min, 148-min)"
+        type: boolean
+        default: true
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - browser: chrome
+            variant: ""
+            version: ""
+          - browser: chrome
+            variant: min
+            version: "1.61.1"
+          - browser: chrome
+            variant: min
+            version: "1.60.0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Resolve version
+        id: tag
+        run: |
+          if [[ "${{ matrix.variant }}" == "min" ]]; then
+            echo "version=${{ matrix.version }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            ref="${GITHUB_REF#refs/tags/}"
+            ref="${ref#chrome-}"
+            ref="${ref%-min}"
+            echo "version=${ref}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip warm image on min-only tag
+        id: skip
+        run: |
+          if [[ "${{ matrix.variant }}" == "" && "${GITHUB_REF#refs/tags/}" == *-min ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ matrix.variant }}" == "min" && "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.publish_min }}" != "true" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push
+        if: steps.skip.outputs.skip != 'true'
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+          BROWSER: ${{ matrix.browser }}
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          chmod +x webdriver/scripts/push.sh
+          if [[ -n "${VARIANT}" ]]; then
+            ./webdriver/scripts/push.sh "${BROWSER}" "${VERSION}" "${VARIANT}"
+          else
+            ./webdriver/scripts/push.sh "${BROWSER}" "${VERSION}"
+          fi

@@ -38,7 +38,7 @@ HEALTHCHECK --interval=5s --timeout=3s --start-period=30s --retries=6 \
     CMD curl -sf http://127.0.0.1:3000/ >/dev/null || exit 1
 
 LABEL org.opencontainers.image.title="qaguru/playwright-chromium-min" \
-      org.opencontainers.image.source="https://github.com/qa-guru/playwright-image" \
+      org.opencontainers.image.source="https://github.com/qa-guru/browser-image" \
       io.qaguru.browser="chromium" \
       io.qaguru.protocol="playwright" \
       io.qaguru.port="3000" \

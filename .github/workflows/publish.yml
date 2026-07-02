@@ -55,9 +55,9 @@ jobs:
           BROWSER: ${{ matrix.browser }}
           VARIANT: ${{ matrix.variant }}
         run: |
-          chmod +x scripts/push.sh
+          chmod +x playwright/scripts/push.sh
           if [[ -n "${VARIANT}" ]]; then
-            ./scripts/push.sh "${BROWSER}" "${VERSION}" "${VARIANT}"
+            ./playwright/scripts/push.sh "${BROWSER}" "${VERSION}" "${VARIANT}"
           else
-            ./scripts/push.sh "${BROWSER}" "${VERSION}"
+            ./playwright/scripts/push.sh "${BROWSER}" "${VERSION}"
           fi

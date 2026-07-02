@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-WARM_API_SRC="${ROOT}/../warm-pool-orchestrator/warm-api"
+WARM_API_SRC="${ROOT}/../../warm-pool-orchestrator/warm-api"
 BROWSER="${1:-}"
 VERSION="${2:-1.61.1}"
 VARIANT="${3:-}"

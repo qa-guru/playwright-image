@@ -7,39 +7,46 @@ ENV PW_HOST=0.0.0.0 \
     PW_PORT=3000 \
     PW_PATH=/ \
     PW_HEADLESS=true \
-    PW_BROWSER_TYPE=firefox \
-    PW_BROWSER_NAME=Firefox \
+    PW_BROWSER_TYPE=webkit \
+    PW_BROWSER_NAME=WebKit \
     DISPLAY=:99 \
     DISPLAY_NUM=99 \
+    WARM_ENABLED=true \
+    WARM_PORT=8080 \
+    WARM_VIDEO_DIR=/data/video \
+    WARM_VIDEO=true \
     NODE_PATH=/usr/lib/node_modules
 
 USER root
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         dumb-init \
+        curl \
+        ffmpeg \
         x11-utils \
         x11vnc \
         xvfb \
     && npm install -g "playwright-core@${PLAYWRIGHT_VERSION}" \
     && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /opt/playwright /tmp/.X11-unix \
+RUN mkdir -p /opt/playwright /opt/playwright/warm-api /data/video /tmp/.X11-unix \
     && chmod 1777 /tmp/.X11-unix
 
 COPY shared/common.sh shared/entrypoint.sh shared/server.cjs shared/launch-headed-browser.js /opt/playwright/
+COPY warm-api/warm-server.cjs warm-api/video-recorder.cjs warm-api/playwright-warm-main.cjs /opt/playwright/warm-api/
 RUN chmod +x /opt/playwright/entrypoint.sh
 
 USER pwuser
 WORKDIR /home/pwuser
 
-EXPOSE 3000 5900
+EXPOSE 3000 8080 5900
 
 HEALTHCHECK --interval=5s --timeout=3s --start-period=30s --retries=6 \
-    CMD node -e "require('http').get('http://127.0.0.1:3000/',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+    CMD curl -sf http://127.0.0.1:8080/warm/status >/dev/null || exit 1
 
-LABEL org.opencontainers.image.title="qaguru/playwright-firefox" \
-      org.opencontainers.image.source="https://github.com/qa-guru/playwright-image" \
-      io.qaguru.browser="firefox" \
+LABEL org.opencontainers.image.title="qaguru/playwright-webkit" \
+      org.opencontainers.image.source="https://github.com/qa-guru/browser-image" \
+      io.qaguru.browser="webkit" \
       io.qaguru.protocol="playwright" \
       io.qaguru.port="3000"
 

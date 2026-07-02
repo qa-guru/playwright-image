@@ -2,14 +2,21 @@ ARG PLAYWRIGHT_VERSION=1.61.1
 FROM mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble
 
 ARG PLAYWRIGHT_VERSION
+ARG PW_BROWSER_TYPE=chromium
+ARG PW_BROWSER_NAME=Chromium
+ARG PW_BROWSER_CHANNEL=
 
 ENV PW_HOST=0.0.0.0 \
     PW_PORT=3000 \
     PW_PATH=/ \
     PW_HEADLESS=true \
-    PW_BROWSER_TYPE=chromium \
-    PW_BROWSER_NAME="Microsoft Edge" \
-    PW_BROWSER_CHANNEL=msedge \
+    PW_BROWSER_TYPE=${PW_BROWSER_TYPE} \
+    PW_BROWSER_NAME=${PW_BROWSER_NAME} \
+    PW_BROWSER_CHANNEL=${PW_BROWSER_CHANNEL} \
+    WARM_ENABLED=true \
+    WARM_PORT=8080 \
+    WARM_VIDEO_DIR=/data/video \
+    WARM_VIDEO=true \
     DISPLAY=:99 \
     DISPLAY_NUM=99 \
     NODE_PATH=/usr/lib/node_modules
@@ -18,31 +25,32 @@ USER root
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         dumb-init \
+        curl \
+        ffmpeg \
         x11-utils \
         x11vnc \
         xvfb \
     && npm install -g "playwright-core@${PLAYWRIGHT_VERSION}" \
-    && npx playwright install --with-deps msedge \
-    && test -x /opt/microsoft/msedge/msedge \
     && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /opt/playwright /tmp/.X11-unix \
+RUN mkdir -p /opt/playwright /opt/playwright/warm-api /data/video /tmp/.X11-unix \
     && chmod 1777 /tmp/.X11-unix
 
 COPY shared/common.sh shared/entrypoint.sh shared/server.cjs shared/launch-headed-browser.js /opt/playwright/
+COPY warm-api/warm-server.cjs warm-api/video-recorder.cjs warm-api/playwright-warm-main.cjs /opt/playwright/warm-api/
 RUN chmod +x /opt/playwright/entrypoint.sh
 
 USER pwuser
 WORKDIR /home/pwuser
 
-EXPOSE 3000 5900
+EXPOSE 3000 8080 5900
 
 HEALTHCHECK --interval=5s --timeout=3s --start-period=30s --retries=6 \
-    CMD node -e "require('http').get('http://127.0.0.1:3000/',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+    CMD curl -sf http://127.0.0.1:8080/warm/status >/dev/null || exit 1
 
-LABEL org.opencontainers.image.title="qaguru/playwright-msedge" \
-      org.opencontainers.image.source="https://github.com/qa-guru/playwright-image" \
-      io.qaguru.browser="msedge" \
+LABEL org.opencontainers.image.title="qaguru/playwright-chromium" \
+      org.opencontainers.image.source="https://github.com/qa-guru/browser-image" \
+      io.qaguru.browser="chromium" \
       io.qaguru.protocol="playwright" \
       io.qaguru.port="3000"
 
